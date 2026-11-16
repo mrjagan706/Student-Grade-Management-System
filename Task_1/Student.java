@@ -1,5 +1,5 @@
-
 import java.util.*;
+import java.io.*;
 
 class StudentDetails {
 
@@ -7,7 +7,6 @@ class StudentDetails {
     private String name;
     private HashMap<String, Integer> grades;
 
-    // Constructor
     public StudentDetails(int id, String name) {
         setId(id);
         setName(name);
@@ -35,9 +34,10 @@ class StudentDetails {
     }
 
     public void setName(String name) {
-        if (name == null || name.trim().isEmpty()) {
+        if (name == null || name.trim().isEmpty()
+                || name.contains("|")) {
             throw new IllegalArgumentException(
-                "Student name cannot be empty."
+                "Invalid student name."
             );
         }
 
@@ -49,7 +49,7 @@ class StudentDetails {
 
         if (subject == null || subject.trim().isEmpty()) {
             throw new IllegalArgumentException(
-                "Subject name cannot be empty."
+                "Subject cannot be empty."
             );
         }
 
@@ -59,7 +59,7 @@ class StudentDetails {
             );
         }
 
-        grades.put(subject.trim(), marks);
+        grades.put(subject, marks);
     }
 
     // Calculate Average
@@ -74,13 +74,12 @@ class StudentDetails {
         for (int marks : grades.values()) {
             total += marks;
         }
-
-        return (double) total / grades.size();
+        return ((float) total / (grades.size() * 100)) * 100;
     }
 
     // Calculate GPA
     public double calculateGPA() {
-        return calculateAverage() / 25.0;
+        return calculateAverage()/10;
     }
 
     // Generate Student Report
@@ -129,16 +128,14 @@ class StudentDetails {
         System.out.println(
             String.format(
                 "%-25s %10.2f",
-                "Average",
-                calculateAverage()
+                "Average", calculateAverage()
             )
         );
 
         System.out.println(
             String.format(
                 "%-25s %10.2f",
-                "GPA",
-                calculateGPA()
+                "GPA", calculateGPA()
             )
         );
 
@@ -146,16 +143,21 @@ class StudentDetails {
     }
 }
 
+
 // MAIN CLASS
 public class Student {
 
-    static ArrayList<StudentDetails> students = new ArrayList<>();
+    static ArrayList<StudentDetails> students =
+        new ArrayList<>();
 
     static Scanner sc = new Scanner(System.in);
+
+    static final String FILE_NAME = "students.txt";
 
     static final String[] SUBJECTS = {
         "Math", "Science", "English", "Computer"
     };
+
 
     // Read Integer with Validation
     public static int readInt(String message) {
@@ -165,17 +167,43 @@ public class Student {
             System.out.print(message);
 
             try {
-
                 return Integer.parseInt(sc.nextLine().trim());
 
             } catch (NumberFormatException e) {
 
-                System.out.println("Please enter a valid number!");
+                System.out.println(
+                    "Please enter a valid number!"
+                );
             }
         }
     }
 
-    // Read Marks Between 0 and 100
+
+    // Read Non-Empty String
+    public static String readString(String message) {
+
+        while (true) {
+
+            System.out.print(message);
+
+            String value = sc.nextLine().trim();
+
+            if (value.isEmpty()) {
+                System.out.println("Input cannot be empty!");
+            }
+            else if (value.contains("|")) {
+                System.out.println(
+                    "The | character is not allowed!"
+                );
+            }
+            else {
+                return value;
+            }
+        }
+    }
+
+
+    // Read Marks with Validation
     public static int readMarks(String subject) {
 
         while (true) {
@@ -189,27 +217,11 @@ public class Student {
             }
 
             System.out.println(
-                "Invalid marks! Please enter between 0 and 100."
+                "Invalid marks! Enter between 0 and 100."
             );
         }
     }
 
-    // Read Non-Empty String
-    public static String readString(String message) {
-
-        while (true) {
-
-            System.out.print(message);
-
-            String value = sc.nextLine().trim();
-
-            if (!value.isEmpty()) {
-                return value;
-            }
-
-            System.out.println("Input cannot be empty!");
-        }
-    }
 
     // Find Student
     public static StudentDetails findStudent(int id) {
@@ -224,64 +236,223 @@ public class Student {
         return null;
     }
 
-    // Add Student with Manual Marks Input
-    
-public static void addStudent() {
 
-    System.out.println("\n===== ADD 5 STUDENTS =====");
+    // SAVE STUDENT DATA INTO TEXT FILE
+    public static void saveStudents() {
 
-    for (int i = 1; i <= 5; i++) {
+        try (PrintWriter writer =
+                new PrintWriter(new FileWriter(FILE_NAME))) {
 
-        System.out.println("\n----- STUDENT " + i + " -----");
+            for (StudentDetails s : students) {
 
-        int id;
+                writer.print(s.getId() + "|");
+                writer.print(s.getName());
 
-        while (true) {
+                for (String subject : SUBJECTS) {
 
-            id = readInt("Enter Student ID: ");
+                    writer.print("|");
 
-            if (id <= 0) {
-                System.out.println("ID must be greater than 0!");
+                    // -1 means marks have not been recorded
+                    writer.print(
+                        getStoredMarks(s, subject)
+                    );
+                }
+
+                writer.println();
             }
-            else if (findStudent(id) != null) {
-                System.out.println("Student ID already exists!");
-            }
-            else {
-                break;
-            }
+
+            System.out.println(
+                "Student data saved successfully!"
+            );
+
+        } catch (IOException e) {
+
+            System.out.println(
+                "Error saving data: " + e.getMessage()
+            );
+        }
+    }
+
+
+    // Get Marks for Saving
+    public static int getStoredMarks(
+            StudentDetails s, String subject) {
+
+        // The report uses the four fixed subjects.
+        // A missing subject is represented by -1.
+        try {
+            java.lang.reflect.Field field =
+                StudentDetails.class.getDeclaredField("grades");
+
+            field.setAccessible(true);
+
+            HashMap<String, Integer> grades =
+                (HashMap<String, Integer>) field.get(s);
+
+            return grades.getOrDefault(subject, -1);
+
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
+
+    // LOAD STUDENT DATA FROM TEXT FILE
+    public static void loadStudents() {
+
+        File file = new File(FILE_NAME);
+
+        if (!file.exists()) {
+
+            System.out.println(
+                "No previous student records found."
+            );
+
+            return;
         }
 
-        String name = readString("Enter Student Name: ");
+        int loaded = 0;
 
-        StudentDetails s = new StudentDetails(id, name);
+        try (BufferedReader reader =
+                new BufferedReader(new FileReader(file))) {
 
-        for (String subject : SUBJECTS) {
+            String line;
 
-            int marks = readMarks(subject);
+            while ((line = reader.readLine()) != null) {
 
-            s.addMarks(subject, marks);
+                try {
+
+                    String[] data = line.split("\\|", -1);
+
+                    if (data.length != 6) {
+                        continue;
+                    }
+
+                    int id = Integer.parseInt(data[0]);
+
+                    String name = data[1];
+
+                    if (id <= 0 || name.trim().isEmpty()
+                            || findStudent(id) != null) {
+                        continue;
+                    }
+
+                    StudentDetails s =
+                        new StudentDetails(id, name);
+
+                    for (int i = 0; i < SUBJECTS.length; i++) {
+
+                        int marks = Integer.parseInt(data[i + 2]);
+
+                        if (marks == -1) {
+                            continue;
+                        }
+
+                        s.addMarks(SUBJECTS[i], marks);
+                    }
+
+                    students.add(s);
+                    loaded++;
+
+                } catch (Exception e) {
+
+                    System.out.println(
+                        "Skipping invalid student record."
+                    );
+                }
+            }
+
+            System.out.println(
+                loaded + " student records loaded successfully!"
+            );
+
+        } catch (IOException e) {
+
+            System.out.println(
+                "Error loading data: " + e.getMessage()
+            );
+        }
+    }
+
+
+    // ADD 5 STUDENTS
+    public static void addStudent() {
+
+        System.out.println("\n===== ADD 5 STUDENTS =====");
+
+        for (int i = 1; i <= 5; i++) {
+
+            System.out.println(
+                "\n---------- STUDENT " + i + " ----------"
+            );
+
+            int id;
+
+            while (true) {
+
+                id = readInt("Enter Student ID: ");
+
+                if (id <= 0) {
+                    System.out.println(
+                        "ID must be greater than 0!"
+                    );
+                }
+                else if (findStudent(id) != null) {
+                    System.out.println(
+                        "Student ID already exists!"
+                    );
+                }
+                else {
+                    break;
+                }
+            }
+
+            String name = readString("Enter Student Name: ");
+
+            StudentDetails s =
+                new StudentDetails(id, name);
+
+            System.out.println("\n----- ENTER SUBJECT MARKS -----");
+
+            for (String subject : SUBJECTS) {
+
+                int marks = readMarks(subject);
+
+                s.addMarks(subject, marks);
+            }
+
+            students.add(s);
+
+            System.out.println(
+                "\nStudent " + i + " added successfully!"
+            );
+
+            // Save after every student
+            saveStudents();
+
+            System.out.println(
+                String.format(
+                    "Average: %.2f", s.calculateAverage()
+                )
+            );
+
+            System.out.println(
+                String.format(
+                    "GPA: %.2f", s.calculateGPA()
+                )
+            );
         }
 
-        students.add(s);
-
-        System.out.println("Student " + i + " added successfully!");
-
         System.out.println(
-            String.format("Average: %.2f", s.calculateAverage())
-        );
-
-        System.out.println(
-            String.format("GPA: %.2f", s.calculateGPA())
+            "\n5 Students Added Successfully!"
         );
     }
 
-    System.out.println("\n5 Students Added Successfully!");
-}
 
-    // Record or Update Marks
+    // RECORD / UPDATE MARKS
     public static void recordMarks() {
 
-        System.out.println("\n===== RECORD STUDENT MARKS =====");
+        System.out.println("\n===== RECORD / UPDATE MARKS =====");
 
         int id = readInt("Enter Student ID: ");
 
@@ -295,6 +466,7 @@ public static void addStudent() {
         System.out.println("\nAvailable Subjects:");
 
         for (int i = 0; i < SUBJECTS.length; i++) {
+
             System.out.println(
                 (i + 1) + ". " + SUBJECTS[i]
             );
@@ -313,10 +485,15 @@ public static void addStudent() {
 
         s.addMarks(subject, marks);
 
-        System.out.println("Marks updated successfully!");
+        saveStudents();
+
+        System.out.println(
+            "Marks updated and saved successfully!"
+        );
     }
 
-    // Calculate Class Average
+
+    // CLASS AVERAGE
     public static void calculateClassAverage() {
 
         if (students.isEmpty()) {
@@ -325,25 +502,22 @@ public static void addStudent() {
         }
 
         double total = 0;
-        int count = 0;
 
         for (StudentDetails s : students) {
-
             total += s.calculateAverage();
-            count++;
         }
 
-        double average = total / count;
+        double average = total / students.size();
 
         System.out.println(
             String.format(
-                "\nClass Average: %.2f",
-                average
+                "\nClass Average: %.2f", average
             )
         );
     }
 
-    // Calculate Class Median
+
+    // CLASS MEDIAN
     public static void calculateClassMedian() {
 
         if (students.isEmpty()) {
@@ -377,13 +551,13 @@ public static void addStudent() {
 
         System.out.println(
             String.format(
-                "\nClass Median: %.2f",
-                median
+                "\nClass Median: %.2f", median
             )
         );
     }
 
-    // Generate All Reports
+
+    // GENERATE ALL REPORTS
     public static void generateAllReports() {
 
         if (students.isEmpty()) {
@@ -396,8 +570,16 @@ public static void addStudent() {
         }
     }
 
-    // Main Method
+
+    // MAIN METHOD
     public static void main(String[] args) {
+
+        // Load saved records when program starts
+        System.out.println(
+            "\n===== STUDENT GRADE MANAGEMENT SYSTEM ====="
+        );
+
+        loadStudents();
 
         int choice;
 
@@ -415,7 +597,7 @@ public static void addStudent() {
                 "=========================================="
             );
 
-            System.out.println("1. Add Student");
+            System.out.println("1. Add 5 Students");
             System.out.println("2. Record / Update Marks");
             System.out.println("3. Calculate Class Average");
             System.out.println("4. Calculate Class Median");
@@ -451,14 +633,17 @@ public static void addStudent() {
                     break;
 
                 case 6:
+                    saveStudents();
+
                     System.out.println(
-                        "Thank you for using Student Grade Management System!"
+                        "Thank you for using the system!"
                     );
+
                     break;
 
                 default:
                     System.out.println(
-                        "Invalid choice! Please try again."
+                        "Invalid choice! Try again."
                     );
             }
 
